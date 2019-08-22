@@ -86,6 +86,10 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _pnh(privateNodeHandle), _dev(dev), _json_file_path(""),
     _serial_no(serial_no),
     _is_initialized_time_base(false),
+    _last_color_f_ms(0.0),
+    _last_pose_f_ms(0.0),
+    _last_depth_f_ms(0.0),
+    _last_ir_f_ms(0.0),
     _namespace(getNamespaceStr())
 {
     // Types for depth stream
@@ -144,9 +148,21 @@ void BaseRealSenseNode::toggleSensors(bool enabled)
         try
         {
             if (enabled)
-                sens.start(_syncer);
-            else
+            {
+               /* Install the syncer callback only if SYNC is required */
+               if (_sync_frames) {
+                  ROS_WARN("Starting TM2 sensor in SYNC mode");
+                  sens.start(_syncer);
+               } else {
+                  ROS_WARN("Starting TM2 sensor");
+                  sens.start([this](rs2::frame frame){multiple_message_callback(frame, _imu_sync_method);});
+               }
+            } else {
+                ROS_WARN("Stopping TM2 sensor");
                 sens.stop();
+           }
+           /* We have only one TM2 sensor, no point in iteration */
+           break;
         }
         catch(const rs2::wrong_api_call_sequence_error& ex)
         {
@@ -1384,7 +1400,61 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
     const auto& stream_index(POSE);
     rs2_pose pose = frame.as<rs2::pose_frame>().get_pose_data();
     double elapsed_camera_ms = (/*ms*/ frame_time - /*ms*/ _camera_time_base) / 1000.0;
+    double pose_fps = elapsed_camera_ms - _last_pose_f_ms;
+    bool reset_pipe = false;
     ros::Time t(_ros_time_base.toSec() + elapsed_camera_ms);
+
+    ROS_WARN("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
+          pose_fps, pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence, (int)pose.mapper_confidence);
+
+    if ( (((int)_last_pose_f_ms != 0 ) && pose_fps > 0.007) || std::isnan(pose.translation.x) ||
+       std::isnan(pose.translation.y) ||
+       std::isnan(pose.translation.z))
+    {
+        ROS_WARN("last elapsed camera ms %f pose_fps %f", _last_pose_f_ms , pose_fps);
+        ROS_WARN("Either One of the coordinates in NAN or POSE FPS is greater than 5ms");
+       _last_pose_f_ms = 0.0;
+        reset_pipe = true;
+    }
+
+    if (!pose.tracker_confidence)
+    {
+       ROS_WARN("Tracker confidence is zero for POSE data. Ignoring");
+        ROS_WARN("Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f confidence=%d\n",
+           pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence);
+    }
+
+    if (reset_pipe) {
+       geometry_msgs::PoseStamped pose_msg;
+       nav_msgs::Odometry odom_msg;
+       
+       ROS_WARN("Initiating reset sequence.");
+       toggleSensors(false);
+
+       ROS_WARN("Sensor is stopped");
+       std::cout << "Sleep for a 200ms to drain the pipe" << std::endl;
+       std::this_thread::sleep_for(std::chrono::milliseconds(200));
+       ROS_WARN("Starting the sensor");
+       
+       toggleSensors(true);
+       ROS_WARN("Done");
+       ROS_WARN("Publishing 1e-10 VALUE");
+       pose_msg.pose.position.x = 0.0000000000;
+       pose_msg.pose.position.y = 0.0000000000;
+       pose_msg.pose.position.z = 0.0000000000;
+       _seq[stream_index] += 1;
+       odom_msg.header.frame_id = _odom_frame_id;
+       odom_msg.child_frame_id  = _frame_id[POSE];
+       odom_msg.header.stamp = t;
+       odom_msg.header.seq = _seq[stream_index];
+       odom_msg.pose.pose = pose_msg.pose;
+       _imu_publishers[stream_index].publish(odom_msg);
+       ROS_INFO("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+       return;
+    }
+
+    _last_pose_f_ms = elapsed_camera_ms;
+
 
     geometry_msgs::PoseStamped pose_msg;
     pose_msg.pose.position.x = -pose.translation.z;
@@ -1467,6 +1537,9 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
     
     try{
         double frame_time = frame.get_timestamp();
+        double frame_fps;
+        double elapsed_camera_ms = (/*ms*/ frame_time - /*ms*/ _camera_time_base) / 1000.0;
+
 
         // We compute a ROS timestamp which is based on an initial ROS time at point of first frame,
         // and the incremental timestamp from the camera.
@@ -1614,6 +1687,20 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
             runFirstFrameInitialization(stream_type);
 
             stream_index_pair sip{stream_type,stream_index};
+
+
+            if (stream_type == RS2_STREAM_COLOR) {
+               frame_fps = elapsed_camera_ms - _last_color_f_ms;
+               _last_color_f_ms = elapsed_camera_ms;
+            } else if (stream_type == RS2_STREAM_INFRARED) {
+               frame_fps = elapsed_camera_ms - _last_ir_f_ms;
+               _last_ir_f_ms = elapsed_camera_ms;
+            } else if (stream_type == RS2_STREAM_DEPTH) {
+               frame_fps = elapsed_camera_ms - _last_depth_f_ms;
+               _last_depth_f_ms = elapsed_camera_ms;
+            }
+            ROS_WARN("FRAME callback MS = %0.6f ms" , frame_fps);
+
             if (frame.is<rs2::depth_frame>())
             {
                 if (_clipping_distance > 0)
