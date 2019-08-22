@@ -1453,7 +1453,11 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
        return;
     }
 
+<<<<<<< HEAD
     _last_pose_f_ms = elapsed_camera_ms;
+=======
+    last_pose_f_ms = elapsed_camera_ms;
+>>>>>>> 242abe044035435f6f6dbaab579e63ee5057bfb7
 
 
     geometry_msgs::PoseStamped pose_msg;
@@ -1690,6 +1694,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
 
 
             if (stream_type == RS2_STREAM_COLOR) {
+<<<<<<< HEAD
                frame_fps = elapsed_camera_ms - _last_color_f_ms;
                _last_color_f_ms = elapsed_camera_ms;
             } else if (stream_type == RS2_STREAM_INFRARED) {
@@ -1698,6 +1703,16 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
             } else if (stream_type == RS2_STREAM_DEPTH) {
                frame_fps = elapsed_camera_ms - _last_depth_f_ms;
                _last_depth_f_ms = elapsed_camera_ms;
+=======
+               frame_fps = elapsed_camera_ms - last_color_f_ms;
+               last_color_f_ms = elapsed_camera_ms;
+            } else if (stream_type == RS2_STREAM_INFRARED) {
+               frame_fps = elapsed_camera_ms - last_ir_f_ms;
+               last_ir_f_ms = elapsed_camera_ms;
+            } else if (stream_type == RS2_STREAM_DEPTH) {
+               frame_fps = elapsed_camera_ms - last_depth_f_ms;
+               last_depth_f_ms = elapsed_camera_ms;
+>>>>>>> 242abe044035435f6f6dbaab579e63ee5057bfb7
             }
             ROS_WARN("FRAME callback MS = %0.6f ms" , frame_fps);
 
