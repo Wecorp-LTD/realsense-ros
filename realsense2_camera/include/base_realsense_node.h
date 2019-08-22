@@ -291,6 +291,12 @@ namespace realsense2_camera
         double _camera_time_base;
         std::map<stream_index_pair, std::vector<rs2::stream_profile>> _enabled_profiles;
 
+        double _last_color_f_ms;
+        double _last_pose_f_ms;
+        double _last_depth_f_ms;
+        double _last_ir_f_ms;
+
+
         ros::Publisher _pointcloud_publisher;
         ros::Time _ros_time_base;
         bool _sync_frames;
