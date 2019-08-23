@@ -90,6 +90,8 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _last_pose_f_ms(0.0),
     _last_depth_f_ms(0.0),
     _last_ir_f_ms(0.0),
+    _restart_pipe(false),
+    _outstanding_fake_pose_frame(5),
     _namespace(getNamespaceStr())
 {
     // Types for depth stream
@@ -1399,6 +1401,25 @@ void BaseRealSenseNode::imu_callback(rs2::frame frame)
     }
 }
 
+void BaseRealSenseNode::publish_fake_pose_frame()
+{
+    geometry_msgs::PoseStamped pose_msg;
+    nav_msgs::Odometry odom_msg;
+    ROS_WARN("Publishing 1e-10 VALUE");
+    pose_msg.pose.position.x = 0.0000000000;
+    pose_msg.pose.position.y = 0.0000000000;
+    pose_msg.pose.position.z = 0.0000000000;
+    _seq[stream_index] += 1;
+    odom_msg.header.frame_id = _odom_frame_id;
+    odom_msg.child_frame_id  = _frame_id[POSE];
+    odom_msg.header.stamp = t;
+    odom_msg.header.seq = _seq[stream_index];
+    odom_msg.pose.pose = pose_msg.pose;
+    _imu_publishers[stream_index].publish(odom_msg);
+    ROS_INFO("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+    _outstanding_fake_pose_frame--;
+    
+}
 void BaseRealSenseNode::pose_callback(rs2::frame frame)
 {
     double frame_time = frame.get_timestamp();
@@ -1425,6 +1446,12 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
     ROS_WARN("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
           pose_fps, pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence, (int)pose.mapper_confidence);
 
+    /* If there is any outstanding fake pose stream should be published?? */
+    if (_outstanding_fake_pose_frame)
+    {
+        ROS_WARN("Outstanding fake pose stream = %d. Publish it ", _outstanding_fake_pose_frame);
+        publish_fake_pose_frame();
+    }
     if ( (((int)_last_pose_f_ms != 0 ) && pose_fps > 0.007) || std::isnan(pose.translation.x) ||
        std::isnan(pose.translation.y) ||
        std::isnan(pose.translation.z))
@@ -1432,6 +1459,7 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
         ROS_WARN("last elapsed camera ms %f pose_fps %f", _last_pose_f_ms , pose_fps);
         ROS_WARN("Either One of the coordinates in NAN or POSE FPS is greater than 5ms");
        _last_pose_f_ms = 0.0;
+       _outstanding_fake_pose_frame = 5; // VIO publisher runs in 60Hz. We are in 200 Hz. Match the speed
         pose_reset_pipe = true;
     }
 
@@ -1458,18 +1486,6 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
        
        toggleSensors(true);
        ROS_WARN("Done");
-       ROS_WARN("Publishing 1e-10 VALUE");
-       pose_msg.pose.position.x = 0.0000000000;
-       pose_msg.pose.position.y = 0.0000000000;
-       pose_msg.pose.position.z = 0.0000000000;
-       _seq[stream_index] += 1;
-       odom_msg.header.frame_id = _odom_frame_id;
-       odom_msg.child_frame_id  = _frame_id[POSE];
-       odom_msg.header.stamp = t;
-       odom_msg.header.seq = _seq[stream_index];
-       odom_msg.pose.pose = pose_msg.pose;
-       _imu_publishers[stream_index].publish(odom_msg);
-       ROS_INFO("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
        return;
     }
 

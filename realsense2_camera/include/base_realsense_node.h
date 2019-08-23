@@ -254,6 +254,7 @@ namespace realsense2_camera
         rs2_stream rs2_string_to_stream(std::string str);
         void startMonitoring();
         void publish_temperature();
+        void publish_fake_pose_frame();
         void restart_callback(const std_msgs::Bool msg);
 
         rs2::device _dev;
@@ -299,9 +300,12 @@ namespace realsense2_camera
         double _last_depth_f_ms;
         double _last_ir_f_ms;
 
+        int _outstanding_fake_pose_frame;
+
 
         ros::Subscriber _pipe_restart_subscriber;
         bool _restart_pipe;
+        int _outstanding_fake_pose_frame;
 
         ros::Publisher _pointcloud_publisher;
         ros::Time _ros_time_base;
