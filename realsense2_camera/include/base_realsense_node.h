@@ -16,6 +16,7 @@
 #include <tf/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <condition_variable>
+#include <std_msgs/Bool.h>
 
 #include <queue>
 #include <mutex>
@@ -209,6 +210,7 @@ namespace realsense2_camera
         void setupDevice();
         void setupErrorCallback();
         void setupPublishers();
+        void setupSubscribers();
         void enable_devices();
         void setupFilters();
         void setupStreams();
@@ -252,6 +254,7 @@ namespace realsense2_camera
         rs2_stream rs2_string_to_stream(std::string str);
         void startMonitoring();
         void publish_temperature();
+        void restart_callback(const std_msgs::Bool msg);
 
         rs2::device _dev;
         std::map<stream_index_pair, rs2::sensor> _sensors;
@@ -296,6 +299,9 @@ namespace realsense2_camera
         double _last_depth_f_ms;
         double _last_ir_f_ms;
 
+
+        ros::Subscriber _pipe_restart_subscriber;
+        bool _restart_pipe;
 
         ros::Publisher _pointcloud_publisher;
         ros::Time _ros_time_base;

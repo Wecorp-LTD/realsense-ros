@@ -194,6 +194,20 @@ void BaseRealSenseNode::setupErrorCallback()
     }
 }
 
+void BaseRealSenseNode::setupSubscribers()
+{
+    ROS_WARN("Setting up pipe restart topic for subscription");
+    std::string topic_restart_pipe_in = "/restart_pipe";
+    _pipe_restart_subscriber = _node_handle.subscribe(topic_restart_pipe_in, 1, &realsense2_camera::BaseRealSenseNode::restart_callback, this);
+}
+
+void BaseRealSenseNode::restart_callback(const std_msgs::Bool msg)
+{
+    /* TODO: Print which pipe is restarting */
+    ROS_WARN(" PIPE restart request arrived");
+    _restart_pipe = msg.data;
+}
+
 void BaseRealSenseNode::publishTopics()
 {
     getParameters();
@@ -203,6 +217,7 @@ void BaseRealSenseNode::publishTopics()
     setupErrorCallback();
     enable_devices();
     setupPublishers();
+    setupSubscribers();
     setupStreams();
     SetBaseStream();
     registerAutoExposureROIOptions(_node_handle);
@@ -1401,7 +1416,10 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
     rs2_pose pose = frame.as<rs2::pose_frame>().get_pose_data();
     double elapsed_camera_ms = (/*ms*/ frame_time - /*ms*/ _camera_time_base) / 1000.0;
     double pose_fps = elapsed_camera_ms - _last_pose_f_ms;
-    bool reset_pipe = false;
+    bool pose_reset_pipe = false;
+
+
+
     ros::Time t(_ros_time_base.toSec() + elapsed_camera_ms);
 
     ROS_WARN("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
@@ -1414,7 +1432,7 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
         ROS_WARN("last elapsed camera ms %f pose_fps %f", _last_pose_f_ms , pose_fps);
         ROS_WARN("Either One of the coordinates in NAN or POSE FPS is greater than 5ms");
        _last_pose_f_ms = 0.0;
-        reset_pipe = true;
+        pose_reset_pipe = true;
     }
 
     if (!pose.tracker_confidence)
@@ -1424,7 +1442,9 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
            pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence);
     }
 
-    if (reset_pipe) {
+    pose_reset_pipe = pose_reset_pipe |  _restart_pipe;
+
+    if (pose_reset_pipe) {
        geometry_msgs::PoseStamped pose_msg;
        nav_msgs::Odometry odom_msg;
        
