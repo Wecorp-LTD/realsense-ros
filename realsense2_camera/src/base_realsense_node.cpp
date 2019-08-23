@@ -92,7 +92,7 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _last_depth_f_ms(0.0),
     _last_ir_f_ms(0.0),
     _restart_pipe(false),
-    _outstanding_fake_pose_frame(5),
+    _outstanding_fake_pose_frame(0),
     _namespace(getNamespaceStr())
 {
     // Types for depth stream
@@ -1406,10 +1406,10 @@ void BaseRealSenseNode::publish_fake_pose_frame(const std::pair<rs2_stream, int>
 {
     geometry_msgs::PoseStamped pose_msg;
     nav_msgs::Odometry odom_msg;
-    ROS_WARN("Publishing 1e-10 VALUE");
-    pose_msg.pose.position.x = 0.0000000000;
-    pose_msg.pose.position.y = 0.0000000000;
-    pose_msg.pose.position.z = 0.0000000000;
+    ROS_WARN("Publishing 1e-12 VALUE");
+    pose_msg.pose.position.x = 1e-12;
+    pose_msg.pose.position.y = 1e-12;
+    pose_msg.pose.position.z = 1e-12;
     _seq[stream_index] += 1;
     odom_msg.header.frame_id = _odom_frame_id;
     odom_msg.child_frame_id  = _frame_id[POSE];
@@ -1452,6 +1452,7 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
         ROS_WARN("Outstanding fake pose stream = %d. Publish it ", _outstanding_fake_pose_frame);
         publish_fake_pose_frame(stream_index, t);
         ROS_INFO("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+        return;
     }
     if ( (((int)_last_pose_f_ms != 0 ) && pose_fps > 0.007) || std::isnan(pose.translation.x) ||
        std::isnan(pose.translation.y) ||
