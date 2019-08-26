@@ -199,7 +199,7 @@ void BaseRealSenseNode::setupErrorCallback()
 
 void BaseRealSenseNode::setupSubscribers()
 {
-    ROS_WARN("Setting up pipe restart topic for subscription");
+    ROS_INFO("Setting up pipe restart topic for subscription");
     std::string topic_restart_pipe_in = "/restart_pipe";
     _pipe_restart_subscriber = _node_handle.subscribe(topic_restart_pipe_in, 1, &realsense2_camera::BaseRealSenseNode::restart_callback, this);
 }
@@ -1443,15 +1443,15 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
 
     ros::Time t(_ros_time_base.toSec() + elapsed_camera_ms);
 
-    ROS_WARN("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
+    ROS_DEBUG("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
           pose_fps, pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence, (int)pose.mapper_confidence);
 
     /* If there is any outstanding fake pose stream should be published?? */
     if (_outstanding_fake_pose_frame)
     {
-        ROS_WARN("Outstanding fake pose stream = %d. Publish it ", _outstanding_fake_pose_frame);
+        ROS_DEBUG("Outstanding fake pose stream = %d. Publish it ", _outstanding_fake_pose_frame);
         publish_fake_pose_frame(stream_index, t);
-        ROS_INFO("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+        ROS_DEBUG("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
         return;
     }
     if ( (((int)_last_pose_f_ms != 0 ) && pose_fps > 0.007) || std::isnan(pose.translation.x) ||
@@ -1737,7 +1737,7 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                frame_fps = elapsed_camera_ms - _last_depth_f_ms;
                _last_depth_f_ms = elapsed_camera_ms;
             }
-            ROS_WARN("FRAME callback MS = %0.6f ms" , frame_fps);
+            ROS_DEBUG("FRAME callback seconds = %0.6f (s)" , frame_fps);
 
             if (frame.is<rs2::depth_frame>())
             {
