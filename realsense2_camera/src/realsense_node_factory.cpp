@@ -106,11 +106,12 @@ void RealSenseNodeFactory::change_device_callback(rs2::event_information& info)
 	{
 		ROS_ERROR("The device has been disconnected!. Restarting again");
 		_realSenseNode.reset(nullptr);
+                _device = rs2::device();
                  for (auto d : info.get_new_devices())
                  {
                      if (_serial_no == d.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER))
                      {
-                        ROS_ERROR("device found with serial no %s", _serial_no);
+                        ROS_ERROR_STREAM("Device with serial number " << _serial_no << " was found.");
                         break;
                      }
                  }
