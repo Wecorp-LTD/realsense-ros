@@ -304,7 +304,7 @@ namespace realsense2_camera
         ros::Subscriber _pipe_restart_subscriber;
         bool _restart_pipe;
         int _outstanding_fake_pose_frame;
-        int no_of_color_frames_pending;
+        int _no_of_color_frames_pending;
 
         ros::Publisher _pointcloud_publisher;
         ros::Time _ros_time_base;

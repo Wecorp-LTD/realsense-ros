@@ -63,7 +63,7 @@ void T265RealsenseNode::setupSubscribers()
 {
     std::string topic_restart_pipe_in = "/t265_restart_pipe";
     std::string topic_odom_in;
-    pipe_restart_subscriber = node_handle.subscribe(topic_restart_pipe_in, 1, &T265RealsenseNode::restart_callback, this);
+    _pipe_restart_subscriber = _node_handle.subscribe(topic_restart_pipe_in, 1, &T265RealsenseNode::restart_callback, this);
 
     if (not _use_odom_in) return;
 
