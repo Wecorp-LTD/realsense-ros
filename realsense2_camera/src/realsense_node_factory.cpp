@@ -106,11 +106,14 @@ void RealSenseNodeFactory::change_device_callback(rs2::event_information& info)
 	{
 		ROS_ERROR("The device has been disconnected!. Restarting again");
 		_realSenseNode.reset(nullptr);
-                /* TODO: How do we ensure we don't try to restart different device */
-		_device = rs2::device();
-                if (!_device) {
-                   StartDevice();
-                }
+                 for (auto d : info.get_new_devices())
+                 {
+                     if (_serial_no == d.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER))
+                     {
+                        ROS_ERROR("device found with serial no %s", _serial_no);
+                        break;
+                     }
+                 }
 	}
 	if (!_device)
 	{
@@ -136,8 +139,8 @@ void RealSenseNodeFactory::onInit()
 		std::cout << "Press <ENTER> key to continue." << std::endl;
 		std::cin.get();
 #endif
-		ros::NodeHandle nh = getNodeHandle();
-		auto privateNh = getPrivateNodeHandle();
+		ros::NodeHandle nh = getMTNodeHandle();
+		auto privateNh = getMTPrivateNodeHandle();
 		privateNh.param("serial_no", _serial_no, std::string(""));
 
 		std::string rosbag_filename("");

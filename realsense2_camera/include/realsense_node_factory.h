@@ -46,6 +46,7 @@ namespace realsense2_camera
     {
     public:
         virtual void publishTopics() = 0;
+        virtual bool restart_pipe_cfg_get() = 0;
         virtual void registerDynamicReconfigCb(ros::NodeHandle& nh) = 0;
         virtual ~InterfaceRealSenseNode() = default;
     };

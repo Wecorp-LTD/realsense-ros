@@ -8,7 +8,8 @@ T265RealsenseNode::T265RealsenseNode(ros::NodeHandle& nodeHandle,
                                      const std::string& serial_no) : 
                                      BaseRealSenseNode(nodeHandle, privateNodeHandle, dev, serial_no),
                                      _wo_snr(dev.first<rs2::wheel_odometer>()),
-                                     _use_odom_in(false) 
+                                     _use_odom_in(false),
+                                     _restart_pipe(false)
                                      {
                                          _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_MOTION_MODULE_TEMPERATURE};
                                          initializeOdometryInput();
@@ -41,6 +42,17 @@ void T265RealsenseNode::initializeOdometryInput()
     _use_odom_in = true;
 }
 
+bool T265RealsenseNode::restart_pipe_cfg_get()
+{
+    return _restart_pipe;
+}
+
+void T265RealsenseNode::restart_callback(const std_msgs::Bool msg)
+{
+    ROS_WARN("T265 Pipe restart request arrived");
+    _restart_pipe = msg.data;
+}
+
 void T265RealsenseNode::publishTopics()
 {
     BaseRealSenseNode::publishTopics();
@@ -49,9 +61,12 @@ void T265RealsenseNode::publishTopics()
 
 void T265RealsenseNode::setupSubscribers()
 {
+    std::string topic_restart_pipe_in = "/t265_restart_pipe";
+    std::string topic_odom_in;
+    pipe_restart_subscriber = node_handle.subscribe(topic_restart_pipe_in, 1, &T265RealsenseNode::restart_callback, this);
+
     if (not _use_odom_in) return;
 
-    std::string topic_odom_in;
     _pnh.param("topic_odom_in", topic_odom_in, DEFAULT_TOPIC_ODOM_IN);
     ROS_INFO_STREAM("Subscribing to in_odom topic: " << topic_odom_in);
 

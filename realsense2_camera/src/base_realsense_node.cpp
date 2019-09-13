@@ -93,6 +93,7 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _last_ir_f_ms(0.0),
     _restart_pipe(false),
     _outstanding_fake_pose_frame(0),
+    _no_of_color_frames_pending(5),
     _namespace(getNamespaceStr())
 {
     // Types for depth stream
@@ -154,18 +155,16 @@ void BaseRealSenseNode::toggleSensors(bool enabled)
             {
                /* Install the syncer callback only if SYNC is required */
                if (_sync_frames) {
-                  ROS_WARN("Starting TM2 sensor in SYNC mode");
+                  ROS_WARN("Starting sensor in SYNC mode");
                   sens.start(_syncer);
                } else {
-                  ROS_WARN("Starting TM2 sensor");
+                  ROS_WARN("Starting sensor");
                   sens.start([this](rs2::frame frame){multiple_message_callback(frame, _imu_sync_method);});
                }
             } else {
-                ROS_WARN("Stopping TM2 sensor");
+                ROS_WARN("Stopping sensor");
                 sens.stop();
            }
-           /* We have only one TM2 sensor, no point in iteration */
-           break;
         }
         catch(const rs2::wrong_api_call_sequence_error& ex)
         {
@@ -200,15 +199,20 @@ void BaseRealSenseNode::setupErrorCallback()
 void BaseRealSenseNode::setupSubscribers()
 {
     ROS_INFO("Setting up pipe restart topic for subscription");
-    std::string topic_restart_pipe_in = "/restart_pipe";
+    std::string topic_restart_pipe_in = "/d435_restart_pipe";
     _pipe_restart_subscriber = _node_handle.subscribe(topic_restart_pipe_in, 1, &realsense2_camera::BaseRealSenseNode::restart_callback, this);
 }
 
 void BaseRealSenseNode::restart_callback(const std_msgs::Bool msg)
 {
     /* TODO: Print which pipe is restarting */
-    ROS_WARN(" PIPE restart request arrived");
+    ROS_WARN(" D435 PIPE restart request arrived");
     _restart_pipe = msg.data;
+}
+
+bool BaseRealSenseNode::restart_pipe_cfg_get()
+{
+    return _restart_pipe;
 }
 
 void BaseRealSenseNode::publishTopics()
@@ -1472,7 +1476,7 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
            pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence);
     }
 
-    pose_reset_pipe = pose_reset_pipe |  _restart_pipe;
+    pose_reset_pipe = pose_reset_pipe |  this->restart_pipe_cfg_get();
 
     if (pose_reset_pipe) {
        geometry_msgs::PoseStamped pose_msg;
@@ -1481,10 +1485,8 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
        ROS_WARN("Initiating reset sequence.");
        toggleSensors(false);
 
-       ROS_WARN("Sensor is stopped");
        std::cout << "Sleep for a 200ms to drain the pipe" << std::endl;
        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-       ROS_WARN("Starting the sensor");
        
        toggleSensors(true);
        ROS_WARN("Done");
@@ -1745,7 +1747,25 @@ void BaseRealSenseNode::frame_callback(rs2::frame frame)
                 {
                     clip_depth(frame, _clipping_distance);
                 }
+                /* Decrement missing frame count threshold. If the counter is not reset before we reach zero,
+                 * it means color stream is lost
+                 */
+                _no_of_color_frames_pending--;
+            } else {
+                /* Color frame is received. Restart the threshold to DEFAULT */
+                _no_of_color_frames_pending = 5;
             }
+
+            /* If no color frame arrived or restart request by user, stop/start the sensor */
+            if (!_no_of_color_frames_pending || this->restart_pipe_cfg_get()) {
+               ROS_WARN("Either missing color frame in the stream or pipe restart request arrived");
+               toggleSensors(false);
+               /* Wait 200ms to drain the pipe */
+               std::this_thread::sleep_for(std::chrono::milliseconds(200));
+               toggleSensors(true);
+               return;
+            }
+
             publishFrame(frame, t,
                             sip,
                             _image,
@@ -2294,6 +2314,15 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const ros::Time& t,
     }
     auto& image = images[stream];
 
+    auto& info_publisher = info_publishers.at(stream);
+    auto& image_publisher = image_publishers.at(stream);
+
+    /* Before processing frame, check if there is any subscribers */
+    if(0 == info_publisher.getNumSubscribers() &&
+       0 == image_publisher.first.getNumSubscribers()) {
+       return;
+    }
+
     if (copy_data_from_frame)
     {
         if (images[stream].size() != cv::Size(width, height))
@@ -2308,10 +2337,7 @@ void BaseRealSenseNode::publishFrame(rs2::frame f, const ros::Time& t,
     }
 
     ++(seq[stream]);
-    auto& info_publisher = info_publishers.at(stream);
-    auto& image_publisher = image_publishers.at(stream);
-    if(0 != info_publisher.getNumSubscribers() ||
-       0 != image_publisher.first.getNumSubscribers())
+
     {
         sensor_msgs::ImagePtr img;
         img = cv_bridge::CvImage(std_msgs::Header(), encoding.at(stream.first), image).toImageMsg();

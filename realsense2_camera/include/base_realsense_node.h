@@ -121,6 +121,7 @@ namespace realsense2_camera
 
         void toggleSensors(bool enabled);
         virtual void publishTopics() override;
+        virtual bool restart_pipe_cfg_get() override;
         virtual void registerDynamicReconfigCb(ros::NodeHandle& nh) override;
         virtual ~BaseRealSenseNode();
 
@@ -303,6 +304,7 @@ namespace realsense2_camera
         ros::Subscriber _pipe_restart_subscriber;
         bool _restart_pipe;
         int _outstanding_fake_pose_frame;
+        int no_of_color_frames_pending;
 
         ros::Publisher _pointcloud_publisher;
         ros::Time _ros_time_base;
