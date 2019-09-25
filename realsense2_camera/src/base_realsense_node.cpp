@@ -94,6 +94,7 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _restart_pipe(false),
     _outstanding_fake_pose_frame(0),
     _no_of_color_frames_pending(5),
+    _no_of_missing_pose_frames(0),
     _namespace(getNamespaceStr())
 {
     // Types for depth stream
@@ -1450,6 +1451,7 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
     ROS_DEBUG("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
           pose_fps, pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence, (int)pose.mapper_confidence);
 
+
     /* If there is any outstanding fake pose stream should be published?? */
     if (_outstanding_fake_pose_frame)
     {
@@ -1458,16 +1460,28 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
         ROS_DEBUG("Publish %s FAKE stream", rs2_stream_to_string(frame.get_profile().stream_type()));
         return;
     }
-    if ( (((int)_last_pose_f_ms != 0 ) && pose_fps > 0.007) || std::isnan(pose.translation.x) ||
+
+    if (pose_fps > 0.007) {
+        _no_of_missing_pose_frames++;
+    } else {
+        _no_of_missing_pose_frames = 0;
+    }
+
+    if ( (((int)_last_pose_f_ms != 0 ) && _no_of_missing_pose_frames > 3) || std::isnan(pose.translation.x) ||
        std::isnan(pose.translation.y) ||
        std::isnan(pose.translation.z))
     {
+        ROS_WARN("Total missing pose frames = %d", _no_of_missing_pose_frames);
         ROS_WARN("last elapsed camera ms %f pose_fps %f", _last_pose_f_ms , pose_fps);
         ROS_WARN("Either One of the coordinates in NAN or POSE FPS is greater than 5ms");
+        ROS_WARN("pose frame FPS =%f Position Data x=%f y=%f z=%f Orientation Data x=%f y=%f z=%f w=%f tracker confidence=%d mapper confidence=%d\n",
+          pose_fps, pose.translation.x, pose.translation.y, pose.translation.z, pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w, (int)pose.tracker_confidence, (int)pose.mapper_confidence);
+
        _last_pose_f_ms = 0.0;
        _outstanding_fake_pose_frame = 5; // VIO publisher runs in 60Hz. We are in 200 Hz. Match the speed
         pose_reset_pipe = true;
     }
+
 
     if (!pose.tracker_confidence)
     {
