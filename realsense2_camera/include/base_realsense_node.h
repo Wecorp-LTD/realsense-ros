@@ -17,7 +17,8 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <condition_variable>
 #include <std_msgs/Bool.h>
-
+#include <actionlib/server/simple_action_server.h>
+#include <vio/t265_restartAction.h>
 #include <queue>
 #include <mutex>
 #include <atomic>
@@ -257,6 +258,8 @@ namespace realsense2_camera
         void publish_temperature();
         void publish_fake_pose_frame(const std::pair<rs2_stream, int>& stream_index, ros::Time t);
         void restart_callback(const std_msgs::Bool msg);
+	void executeCB(const vio::t265_restartGoalConstPtr &goal);
+
 
         rs2::device _dev;
         std::map<stream_index_pair, rs2::sensor> _sensors;
@@ -295,6 +298,13 @@ namespace realsense2_camera
         std::atomic_bool _is_initialized_time_base;
         double _camera_time_base;
         std::map<stream_index_pair, std::vector<rs2::stream_profile>> _enabled_profiles;
+
+	// Action server
+        actionlib::SimpleActionServer<vio::t265_restartAction> as_;
+        std::string action_name_;
+	vio::t265_restartFeedback feedback_;
+	vio::t265_restartResult result_;
+        bool action_pending;
 
         double _last_color_f_ms;
         double _last_pose_f_ms;

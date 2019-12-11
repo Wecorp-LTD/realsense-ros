@@ -17,6 +17,8 @@ find_package(catkin REQUIRED COMPONENTS
     tf
     ddynamic_reconfigure
     diagnostic_updater
+    actionlib_msgs
+    vio
     )
 
 if(BUILD_WITH_OPENMP)
@@ -65,6 +67,7 @@ include_directories(
     include
     ${realsense2_INCLUDE_DIR}
     ${catkin_INCLUDE_DIRS}
+    ${vio_INCLUDE_DIRS}
     )
 
 # RealSense ROS Node
@@ -76,6 +79,7 @@ catkin_package(
     image_transport
     ddynamic_reconfigure
     nav_msgs
+    vio
     )
 
 add_library(${PROJECT_NAME}
@@ -90,9 +94,9 @@ add_library(${PROJECT_NAME}
 
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
-
 target_include_directories(${PROJECT_NAME}
-  PRIVATE ${realsense2_INCLUDE_DIR})
+  PRIVATE ${realsense2_INCLUDE_DIR}
+  )
 
 target_link_libraries(${PROJECT_NAME}
     ${realsense2_LIBRARY}

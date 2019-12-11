@@ -49,7 +49,9 @@ bool T265RealsenseNode::restart_pipe_cfg_get()
 
 void T265RealsenseNode::restart_callback(const std_msgs::Bool msg)
 {
-    ROS_WARN("T265 Pipe restart request arrived");
+    if (msg.data == true) {
+	    ROS_WARN("T265 Pipe restart request arrived");
+    }
     _restart_pipe = msg.data;
 }
 

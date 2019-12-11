@@ -87,6 +87,8 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _pnh(privateNodeHandle), _dev(dev), _json_file_path(""),
     _serial_no(serial_no),
     _is_initialized_time_base(false),
+    as_(nodeHandle, "realsense-togglesensor", boost::bind(&BaseRealSenseNode::executeCB, this, _1), false),
+    action_name_("realsense-togglesensor"),
     _last_color_f_ms(0.0),
     _last_pose_f_ms(0.0),
     _last_depth_f_ms(0.0),
@@ -133,7 +135,54 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _stream_name[RS2_STREAM_POSE] = "pose";
 
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
+
+    as_.start();
 }
+
+void BaseRealSenseNode::executeCB(const vio::t265_restartGoalConstPtr &goal)
+{
+    bool success = true;
+
+    ROS_INFO("%s: Executing the CB \n", action_name_.c_str());
+    action_pending = true;
+
+    if (as_.isPreemptRequested() || !ros::ok())
+    {
+        ROS_INFO("%s: Preempted\n", action_name_.c_str());
+        // Set the action preempted
+        as_.setPreempted();
+        success = false;
+	result_.t265_restarted = false;
+        // Set the result as false
+        as_.setSucceeded(result_);
+        return;
+    }
+
+    if (_restart_pipe == true || action_pending == true)
+    {
+        ROS_WARN("Sensor restart is in progress. Ignore this action request\n");
+        return;
+
+    }
+    // Client send this action to initiate the restart sequence of sensor.
+    // Set the restart pipe variable as true
+     _restart_pipe = true;
+
+    // Feedback message types
+    // TOGGLE_SENSOR_REQUEST_RECEIVED
+    // SENSOR_STOPPING
+    // SENSOR_STOPPED
+    // SENSOR_STARTING
+    // SENSOR_STARTED
+    // FIRST_POSE_F_ARRIVED
+
+    // Set the feedback message type
+    // TOGGLE_SENSOR_REQUEST_RECEIVED
+
+    // publish the feedback
+    as_.publishFeedback(feedback_);
+}
+
 
 BaseRealSenseNode::~BaseRealSenseNode()
 {
@@ -1497,14 +1546,31 @@ void BaseRealSenseNode::pose_callback(rs2::frame frame)
        nav_msgs::Odometry odom_msg;
        
        ROS_WARN("Initiating reset sequence.");
+       
+       //Set the feedback for the action
+       //SENSOR_STOPPING
+       as_.publishFeedback(feedback_);
+
        toggleSensors(false);
+       as_.publishFeedback(feedback_);
 
        std::cout << "Sleep for a 200ms to drain the pipe" << std::endl;
        std::this_thread::sleep_for(std::chrono::milliseconds(200));
        
+       as_.publishFeedback(feedback_);
        toggleSensors(true);
+       as_.publishFeedback(feedback_);
        ROS_WARN("Done");
        return;
+    }
+
+    // Check if this is first pose frame since client request action to restart the pipe
+    if (action_pending)
+    {
+       action_pending = false;
+       result_.t265_restarted = true;
+       ROS_INFO("%s: Succeeded\n", action_name_.c_str());
+       as_.setSucceeded(result_);
     }
 
     _last_pose_f_ms = elapsed_camera_ms;
