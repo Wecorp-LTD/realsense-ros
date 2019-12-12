@@ -135,16 +135,13 @@ BaseRealSenseNode::BaseRealSenseNode(ros::NodeHandle& nodeHandle,
     _stream_name[RS2_STREAM_POSE] = "pose";
 
     _monitor_options = {RS2_OPTION_ASIC_TEMPERATURE, RS2_OPTION_PROJECTOR_TEMPERATURE};
-
     as_.start();
 }
 
 void BaseRealSenseNode::executeCB(const vio::t265_restartGoalConstPtr &goal)
 {
     bool success = true;
-
-    ROS_INFO("%s: Executing the CB \n", action_name_.c_str());
-    action_pending = true;
+    ros::Rate r(1);
 
     if (as_.isPreemptRequested() || !ros::ok())
     {
@@ -152,9 +149,6 @@ void BaseRealSenseNode::executeCB(const vio::t265_restartGoalConstPtr &goal)
         // Set the action preempted
         as_.setPreempted();
         success = false;
-	result_.t265_restarted = false;
-        // Set the result as false
-        as_.setSucceeded(result_);
         return;
     }
 
@@ -164,23 +158,34 @@ void BaseRealSenseNode::executeCB(const vio::t265_restartGoalConstPtr &goal)
         return;
 
     }
-    // Client send this action to initiate the restart sequence of sensor.
-    // Set the restart pipe variable as true
-     _restart_pipe = true;
 
-    // Feedback message types
-    // TOGGLE_SENSOR_REQUEST_RECEIVED
-    // SENSOR_STOPPING
-    // SENSOR_STOPPED
-    // SENSOR_STARTING
-    // SENSOR_STARTED
-    // FIRST_POSE_F_ARRIVED
+    ROS_WARN("Initiating reset sequence.");
+    toggleSensors(false);
 
-    // Set the feedback message type
-    // TOGGLE_SENSOR_REQUEST_RECEIVED
+    std::cout << "Sleep for a 200ms to drain the pipe" << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    // publish the feedback
-    as_.publishFeedback(feedback_);
+    toggleSensors(true);
+    ROS_WARN("Done");
+
+    action_pending = true;
+
+    while(action_pending)
+    { 
+      /*Wait for the first pose frame since restarted
+       There is slight chance if pose callback is preempted before sending success,
+       However, it will get catch up in next while loop iteration */
+      ROS_WARN("Waiting for first pose frame since T265 restarted\n");
+      r.sleep();
+    }
+    ROS_INFO("First pose frame arrived since T265 restarted\n");
+    if (result_.t265_restarted == false)
+    {
+       result_.t265_restarted = true;
+       as_.setSucceeded(result_);
+    }
+
+    return;
 }
 
 
